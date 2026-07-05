@@ -1,0 +1,9 @@
+build/
+*.o
+*.obj
+*.out
+a.out
+compile_commands.json
+.cache/
+.DS_Store
+IMPLEMENTATION.md
