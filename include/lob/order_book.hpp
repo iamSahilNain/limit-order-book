@@ -22,6 +22,7 @@ public:
     // Submit a new order. Matches the opposite side by price-time (FIFO) priority.
     // Unfilled remainder of a Limit order rests; unfilled Market qty is discarded.
     // Generated trades are appended to `out` (caller clears/reuses it).
+    // Precondition: `order.id` is unique among live (resting) orders.
     virtual void add(const Order& order, std::vector<Trade>& out) = 0;
 
     // Remove a resting order. Returns false for an unknown id.
@@ -29,6 +30,7 @@ public:
 
     // A pure quantity decrease at the same price keeps time priority; any other
     // change is cancel + re-add (loses priority, may cross and match).
+    // new_qty == 0 degenerates to a cancel: the re-add rests nothing.
     virtual bool modify(OrderId id, Price new_price, Quantity new_qty,
                         std::vector<Trade>& out) = 0;
 

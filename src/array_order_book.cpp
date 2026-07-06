@@ -12,8 +12,14 @@ ArrayOrderBook::ArrayOrderBook(Price base_price, Price tick_size,
       best_ask_slot_(static_cast<long>(num_ticks)) {}
 
 long ArrayOrderBook::price_to_slot(Price p) const noexcept {
-    const long s = static_cast<long>((p - base_price_) / tick_size_);
-    if (s < 0 || static_cast<std::size_t>(s) >= num_ticks_) return -1;
+    // Validate before dividing: integer division truncates toward zero, so a
+    // price less than one tick below base would otherwise land on slot 0, and
+    // an off-grid price (not a multiple of tick_size above base) would be
+    // silently floored onto a neighboring level. Both must map to "invalid".
+    const Price off = p - base_price_;
+    if (off < 0 || off % tick_size_ != 0) return -1;
+    const long s = static_cast<long>(off / tick_size_);
+    if (static_cast<std::size_t>(s) >= num_ticks_) return -1;
     return s;
 }
 
@@ -156,20 +162,28 @@ void ArrayOrderBook::rest(const Order& order, long slot, Quantity remaining) {
 }
 
 void ArrayOrderBook::add(const Order& order, std::vector<Trade>& out) {
+    // Validate limit prices up front, the way a venue would: an order whose
+    // price the ladder cannot represent (below base, off the tick grid, or
+    // past the top of the band) is rejected whole -- it neither matches nor
+    // rests. The old policy let such an order match first and then dropped
+    // its residual, which left the book correct but the caller misled.
+    // Market orders carry no price to validate.
+    long slot = -1;
+    if (order.type == OrderType::Limit) {
+        slot = price_to_slot(order.price);
+        if (slot < 0) return;
+    }
+
     Quantity remaining = order.qty;
 
     if (order.side == Side::Buy) {
         match_asks(order, out, remaining);
-        if (remaining > 0 && order.type == OrderType::Limit) {
-            const long slot = price_to_slot(order.price);
-            if (slot >= 0) rest(order, slot, remaining);   // silently reject out-of-band
-        }
+        if (remaining > 0 && order.type == OrderType::Limit)
+            rest(order, slot, remaining);
     } else {
         match_bids(order, out, remaining);
-        if (remaining > 0 && order.type == OrderType::Limit) {
-            const long slot = price_to_slot(order.price);
-            if (slot >= 0) rest(order, slot, remaining);   // silently reject out-of-band
-        }
+        if (remaining > 0 && order.type == OrderType::Limit)
+            rest(order, slot, remaining);
     }
 }
 
@@ -202,6 +216,12 @@ bool ArrayOrderBook::modify(OrderId id, Price new_price, Quantity new_qty,
                             std::vector<Trade>& out) {
     auto it = id_to_node_.find(id);
     if (it == id_to_node_.end()) return false;
+
+    // Refuse a target price the ladder cannot represent BEFORE touching the
+    // resting order. Without this check the cancel+re-add path below would
+    // cancel, fail to re-add, and report success -- the order would simply
+    // vanish. Fail closed instead: return false, order untouched.
+    if (price_to_slot(new_price) < 0) return false;
 
     Node& nd = pool_[it->second];
     const Price cur_price = slot_to_price(static_cast<long>(nd.slot));

@@ -12,9 +12,12 @@ namespace lob {
 // Slot mapping:  slot = (price - base_price) / tick_size
 // Band:          slots [0, num_ticks)  ->  prices [base_price, base_price + num_ticks*tick_size)
 //
-// Out-of-band policy: a resting limit order whose price maps to a slot outside
-// [0, num_ticks) is silently rejected — no trades are produced and no order rests.
-// The benchmark and test configurations are sized so this never triggers.
+// Rejection policy: a limit order whose price the ladder cannot represent —
+// below base_price, not on the tick grid, or at/past the top of the band — is
+// rejected whole at entry: no matching, no resting, no trades. modify() to
+// such a price returns false and leaves the order untouched. This mirrors a
+// real venue, which validates price before accepting an order. The benchmark
+// and test configurations size the band so rejection never fires there.
 //
 // Complexity:
 //   best_bid / best_ask : O(1)   -- direct cursor read
