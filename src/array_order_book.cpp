@@ -144,6 +144,13 @@ void ArrayOrderBook::match_bids(const Order& taker, std::vector<Trade>& out,
 
 void ArrayOrderBook::rest(const Order& order, long slot, Quantity remaining) {
     const std::uint32_t node_idx = pool_.allocate();
+    // Arena exhausted: reject the residual rather than index arena_[NIL].
+    // Same policy as an unrepresentable price -- the order does not rest.
+    // (modify()'s re-add can never land here: its cancel just freed a node.)
+    if (node_idx == Node::NIL) {
+        ++rejected_;
+        return;
+    }
     Node& nd = pool_[node_idx];
     nd.id   = order.id;
     nd.qty  = remaining;
@@ -171,7 +178,10 @@ void ArrayOrderBook::add(const Order& order, std::vector<Trade>& out) {
     long slot = -1;
     if (order.type == OrderType::Limit) {
         slot = price_to_slot(order.price);
-        if (slot < 0) return;
+        if (slot < 0) {
+            ++rejected_;
+            return;
+        }
     }
 
     Quantity remaining = order.qty;
@@ -255,6 +265,7 @@ void ArrayOrderBook::clear() {
     pool_.clear();
     best_bid_slot_ = -1;
     best_ask_slot_ = static_cast<long>(num_ticks_);
+    rejected_ = 0;
 }
 
 } // namespace lob

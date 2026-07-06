@@ -2,6 +2,7 @@
 #include "lob/order_book.hpp"
 #include "lob/memory_pool.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -41,6 +42,11 @@ public:
     std::optional<Price> best_ask() const override;
     void clear() override;
 
+    // Orders dropped by policy (unrepresentable price, or node pool exhausted)
+    // rather than matched or rested. Diagnostic only; not part of IOrderBook
+    // because the map baseline has neither a band nor a pool to reject on.
+    std::uint64_t rejected() const noexcept { return rejected_; }
+
 private:
     // Intrusive doubly linked FIFO per price slot.
     // head = oldest (next to fill); tail = newest (last inserted).
@@ -60,6 +66,8 @@ private:
     //   best_ask_slot_ : lowest  occupied ask slot; sentinel = (long)num_ticks_ (no asks)
     long best_bid_slot_;
     long best_ask_slot_;
+
+    std::uint64_t rejected_ = 0;   // orders dropped by the rejection policy
 
     // Price <-> slot helpers. price_to_slot returns -1 for out-of-band prices.
     long  price_to_slot(Price p) const noexcept;
