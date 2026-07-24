@@ -5,14 +5,6 @@ engine, plus a benchmark harness that measures throughput and per-operation
 latency percentiles. Built to compare two price-ladder designs: a `std::map`
 baseline against a cache-friendly flat array.
 
-## Status
-
-- **Provided & tested:** the matching engine semantics and the `std::map` baseline
-  (`MapOrderBook`), the order-flow generator, the benchmark harness, and a
-  correctness test suite.
-- **Your work (checkpoints):** the flat-array ladder and the memory pool — the
-  parts that make the "cache-friendly flat-array" and "intrusive lists +
-  preallocated pool" claims real. See [Checkpoints](#checkpoints).
 
 ## Design
 
